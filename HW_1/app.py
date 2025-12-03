@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -20,11 +21,16 @@ if 'eda_feed' not in st.session_state:
 
 @st.cache_resource
 def load_model_pack():
+    # Получаем абсолютный путь к папке, где лежит app.py
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # Собираем полный путь к файлу модели
+    file_path = os.path.join(current_dir, 'model_pack.pkl')
+
     try:
-        with open('model_pack.pkl', 'rb') as f:
+        with open(file_path, 'rb') as f:
             return pickle.load(f)
     except FileNotFoundError:
-        st.error("Файл model_pack.pkl не найден! Положите его рядом с app.py.")
+        st.error(f"Файл не найден по пути: {file_path}")
         return None
 
 @st.cache_data
