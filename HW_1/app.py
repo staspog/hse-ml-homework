@@ -87,7 +87,7 @@ def preprocess_input(df_input):
 
     df = pd.get_dummies(df, columns=cat_cols, drop_first=True, dtype=int)
     
-    # Важный шаг: выравниваем колонки, чтобы их порядок и количество совпадали с трейном
+    # Выравниваем колонки, чтобы их порядок и количество совпадали с трейном
     df = df.reindex(columns=ohe_columns, fill_value=0)
     
     return df
