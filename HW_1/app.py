@@ -6,24 +6,19 @@ import pickle
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# --------------------------------------------------------
-# 0. НАСТРОЙКА СТРАНИЦЫ И СОСТОЯНИЯ
-# --------------------------------------------------------
 st.set_page_config(page_title="Car Price Prediction", layout="wide")
 st.title("🚗 Предсказание стоимости автомобиля")
 
+# Инициализируем состояние для хранения истории графиков
 if 'eda_feed' not in st.session_state:
     st.session_state['eda_feed'] = []
 
-# --------------------------------------------------------
-# 1. ЗАГРУЗКА
-# --------------------------------------------------------
-
+# Используем cache_resource для загрузки тяжелых объектов (модели), которые не меняются
+# Это предотвращает повторную загрузку pickle-файла при каждом клике пользователя
 @st.cache_resource
 def load_model_pack():
-    # Получаем абсолютный путь к папке, где лежит app.py
+    # Определяем абсолютный путь к файлу, чтобы избежать ошибок при деплое в облако
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    # Собираем полный путь к файлу модели
     file_path = os.path.join(current_dir, 'model_pack.pkl')
 
     try:
@@ -33,13 +28,15 @@ def load_model_pack():
         st.error(f"Файл не найден по пути: {file_path}")
         return None
 
+# Используем cache_data для датафреймов
+# Streamlit запомнит результат выполнения функции и не будет дергать GitHub лишний раз
 @st.cache_data
 def load_train_data():
     url = 'https://raw.githubusercontent.com/Murcha1990/MLDS_ML_2022/main/Hometasks/HT1/cars_train.csv'
     try:
         return pd.read_csv(url)
     except Exception as e:
-        st.error(f"Не удалось загрузить данные с GitHub: {e}")
+        st.error(f"Ошибка загрузки данных: {e}")
         return None
 
 data_pack = load_model_pack()
@@ -53,15 +50,12 @@ if data_pack:
 else:
     st.stop()
 
-# --------------------------------------------------------
-# 2. ФУНКЦИИ ПРЕДОБРАБОТКИ
-# --------------------------------------------------------
 
-# А) Для предсказания (Точная копия логики ноутбука)
+# Основная функция предобработки для инференса
 def preprocess_input(df_input):
     df = df_input.copy()
     
-    # Очистка строк
+    # Очищаем числовые признаки от единиц измерения (kmpl, CC, bhp)
     for col in ['mileage', 'engine', 'max_power']:
         if col in df.columns and df[col].dtype == 'object':
             df[col] = pd.to_numeric(df[col].str.split().str[0], errors='coerce')
@@ -69,64 +63,61 @@ def preprocess_input(df_input):
     if 'torque' in df.columns and df['torque'].dtype == 'object':
         df['torque'] = pd.to_numeric(df['torque'].str.extract(r'(\d+\.?\d*)')[0], errors='coerce')
 
-    # Заполнение
+    # Заполняем пропуски медианами, которые мы сохранили на этапе обучения
     cols_to_fill = ['mileage', 'engine', 'max_power', 'torque', 'seats']
     for col in cols_to_fill:
         if col in df.columns:
             df[col] = df[col].fillna(medians.get(col, 0))
 
-    # Удаление
+    # Убираем признаки, которые не используются в модели
     drop_cols = ['torque', 'name', 'selling_price']
     df.drop([c for c in drop_cols if c in df.columns], axis=1, inplace=True)
 
-    # Типы
+    # Приводим типы данных
     if 'engine' in df.columns:
         df['engine'] = df['engine'].astype(int)
     if 'seats' in df.columns:
         df['seats'] = df['seats'].astype(int).astype(str)
 
-    # OHE
+    # OneHotEncoding для категорий
     cat_cols = ['fuel', 'seller_type', 'transmission', 'owner', 'seats']
     for col in cat_cols:
         if col not in df.columns:
             df[col] = "unknown"
 
     df = pd.get_dummies(df, columns=cat_cols, drop_first=True, dtype=int)
+    
+    # Важный шаг: выравниваем колонки, чтобы их порядок и количество совпадали с трейном
     df = df.reindex(columns=ohe_columns, fill_value=0)
     
     return df
 
-# Б) Для визуализации (EDA) - просто чистим числа, не удаляем колонки
+# Функция для очистки данных перед визуализацией
 def get_cleaned_data_for_viz(df_raw):
     df = df_raw.copy()
-    # Превращаем строки в числа
     for col in ['mileage', 'engine', 'max_power']:
         if col in df.columns and df[col].dtype == 'object':
             df[col] = pd.to_numeric(df[col].str.split().str[0], errors='coerce')
     
-    # seats тоже делаем числом для графиков
     if 'seats' in df.columns:
         df['seats'] = pd.to_numeric(df['seats'], errors='coerce')
         
     return df
 
-# --------------------------------------------------------
-# 3. ИНТЕРФЕЙС
-# --------------------------------------------------------
 
 tab1, tab2, tab3 = st.tabs(["📊 Лента EDA", "🤖 Предсказание", "⚖️ Веса модели"])
 
-# === ВКЛАДКА 1: EDA ===
+# Вкладка с EDA
 with tab1:
     st.header("Разведочный анализ (Лента событий)")
-    st.write("Нажимайте кнопки. Графики строятся на очищенных данных (как в ноутбуке).")
+    st.write("Нажимайте кнопки. Графики строятся на очищенных данных.")
 
     if df_train is not None:
-        # 1. Сразу готовим чистые данные для графиков
         df_viz = get_cleaned_data_for_viz(df_train)
         
         c1, c2, c3, c4, c5 = st.columns(5)
         
+        # Кнопки добавляют тип графика в начало списка в session_state
         with c1:
             if st.button("📈 Гистограмма цены", use_container_width=True):
                 st.session_state['eda_feed'].insert(0, "hist_price")
@@ -146,6 +137,7 @@ with tab1:
 
         st.divider()
 
+        # Отрисовка всех графиков из истории
         for graph_type in st.session_state['eda_feed']:
             
             if graph_type == "hist_price":
@@ -164,7 +156,6 @@ with tab1:
 
             elif graph_type == "heatmap":
                 st.subheader("Матрица корреляций (Пирсон)")
-                # Теперь считаем по df_viz, где engine и power уже числа
                 fig, ax = plt.subplots(figsize=(10, 8))
                 sns.heatmap(df_viz.corr(numeric_only=True), annot=True, cmap='coolwarm', fmt='.2f', ax=ax)
                 st.pyplot(fig)
@@ -172,19 +163,16 @@ with tab1:
 
             elif graph_type == "pairplot":
                 st.subheader("Pairplot (Попарные распределения)")
-                st.info("Включает: year, price, km_driven, mileage, engine, max_power, seats")
+                st.info("Включает основные числовые признаки")
                 
-                # Выбираем те же колонки, что и в ДЗ
                 target_cols = ['year', 'selling_price', 'km_driven', 'mileage', 'engine', 'max_power', 'seats']
-                
-                # dropna нужен, так как pairplot не любит пропуски, которые появились после очистки строк
                 fig = sns.pairplot(df_viz[target_cols].dropna())
                 st.pyplot(fig)
                 st.markdown("---")
     else:
         st.warning("Данные не загружены.")
 
-# === ВКЛАДКА 2: ПРЕДСКАЗАНИЕ ===
+# Вкладка предсказания
 with tab2:
     st.header("Калькулятор стоимости")
     mode = st.radio("Режим ввода:", ["Ввести вручную", "Загрузить CSV"])
@@ -196,24 +184,55 @@ with tab2:
             input_df = pd.read_csv(uploaded_file)
             st.write("Данные:", input_df.head(3))
     else:
+        # Словари для перевода русского интерфейса в значения модели
+        fuel_map = {'Дизель': 'Diesel', 'Бензин': 'Petrol', 'Газ (CNG)': 'CNG', 'Газ (LPG)': 'LPG'}
+        trans_map = {'Механика': 'Manual', 'Автомат': 'Automatic'}
+        seller_map = {'Частник': 'Individual', 'Дилер': 'Dealer', 'Официальный дилер': 'Trustmark Dealer'}
+        owner_map = {'Первый': 'First Owner', 'Второй': 'Second Owner', 'Третий': 'Third Owner', 'Четвертый и более': 'Fourth & Above Owner', 'Тест-драйв': 'Test Drive Car'}
+
         c1, c2 = st.columns(2)
         with c1:
-            year = st.number_input("Год", 1980, 2025, 2017)
-            km_driven = st.number_input("Пробег (км)", 0, 5000000, 70000)
-            mileage = st.text_input("Расход (напр. '20 kmpl')", "20 kmpl")
-            engine = st.text_input("Двигатель (напр. '1248 CC')", "1248 CC")
+            year = st.number_input("Год выпуска", 1980, 2025, 2017)
+            km_driven = st.number_input("Пробег (км)", 0, 5000000, 70000, step=1000)
+            
+            # Конвертация: л/100км -> kmpl (км на литр)
+            # Формула: kmpl = 100 / (л/100км)
+            fuel_consump = st.number_input("Расход (л/100 км)", 1.0, 50.0, 8.0, step=0.1)
+            mileage_val = 100 / fuel_consump
+            mileage_str = f"{mileage_val:.2f} kmpl" # Формируем строку для модели
+            
+            # Ввод объема в см3, формируем строку "1248 CC"
+            engine_vol = st.number_input("Объем двигателя (см³)", 500, 10000, 1600, step=100)
+            engine_str = f"{int(engine_vol)} CC"
+
         with c2:
-            max_power = st.text_input("Мощность (напр. '80 bhp')", "80 bhp")
-            seats = st.selectbox("Мест", [2,4,5,6,7,8,9,14], index=2)
-            fuel = st.selectbox("Топливо", ['Diesel', 'Petrol', 'CNG', 'LPG'])
-            trans = st.selectbox("Коробка", ['Manual', 'Automatic'])
-            seller = st.selectbox("Продавец", ['Individual', 'Dealer', 'Trustmark Dealer'])
-            owner = st.selectbox("Владелец", ['First Owner', 'Second Owner', 'Third Owner', 'Fourth & Above Owner', 'Test Drive Car'])
+            # Ввод мощности в л.с., формируем строку "100 bhp" (считаем 1 л.с. ≈ 1 bhp для простоты)
+            power_hp = st.number_input("Мощность (л.с.)", 30, 1000, 100, step=5)
+            power_str = f"{power_hp} bhp"
+            
+            seats = st.selectbox("Количество мест", [2,4,5,6,7,8,9,14], index=2)
+            
+            # Русские селекторы с маппингом
+            fuel_ui = st.selectbox("Тип топлива", list(fuel_map.keys()))
+            trans_ui = st.selectbox("Коробка передач", list(trans_map.keys()))
+            seller_ui = st.selectbox("Продавец", list(seller_map.keys()))
+            owner_ui = st.selectbox("Владелец", list(owner_map.keys()))
         
+        # Собираем DataFrame, используя английские значения из словарей и сформированные строки
         input_df = pd.DataFrame({
-            'name': ['User Car'], 'year': [year], 'selling_price': [0], 'km_driven': [km_driven],
-            'fuel': [fuel], 'seller_type': [seller], 'transmission': [trans], 'owner': [owner],
-            'mileage': [mileage], 'engine': [engine], 'max_power': [max_power], 'torque': ['0'], 'seats': [seats]
+            'name': ['User Car'], 
+            'year': [year], 
+            'selling_price': [0], 
+            'km_driven': [km_driven],
+            'fuel': [fuel_map[fuel_ui]],           # Берем значение из словаря
+            'seller_type': [seller_map[seller_ui]], # Берем значение из словаря
+            'transmission': [trans_map[trans_ui]],  # Берем значение из словаря
+            'owner': [owner_map[owner_ui]],         # Берем значение из словаря
+            'mileage': [mileage_str],               # Передаем "20.5 kmpl"
+            'engine': [engine_str],                 # Передаем "1600 CC"
+            'max_power': [power_str],               # Передаем "100 bhp"
+            'torque': ['0'], 
+            'seats': [seats]
         })
 
     if st.button("🚀 Рассчитать цену", use_container_width=True) and input_df is not None:
@@ -222,23 +241,26 @@ with tab2:
         preds = model.predict(X_scaled)
         
         if mode == "Ввести вручную":
-            st.success(f"Прогноз: {preds[0]:,.0f} ₽")
+            st.success(f"Рекомендуемая моделью цена: {preds[0]:,.0f} ₽")
         else:
             input_df['Predicted_Price'] = preds
             st.dataframe(input_df.head())
             csv = input_df.to_csv(index=False).encode('utf-8')
             st.download_button("Скачать CSV", csv, "predictions.csv", "text/csv")
 
-# === ВКЛАДКА 3: ВЕСА МОДЕЛИ ===
+# Вкладка с весами модели
 with tab3:
     st.header("Интерпретация модели")
     coefs = model.coef_
     feats = ohe_columns
+    
+    # Сортируем признаки по модулю веса
     weights = pd.DataFrame({'Feature': feats, 'Weight': coefs})
     weights['Abs_Weight'] = weights['Weight'].abs()
     weights = weights.sort_values(by='Abs_Weight', ascending=False).head(15)
     
     fig, ax = plt.subplots(figsize=(10, 6))
+    # hue и legend нужны для корректной работы в новых версиях seaborn
     sns.barplot(data=weights, x='Weight', y='Feature', hue='Feature', legend=False, palette='viridis', ax=ax)
     plt.title("Топ-15 признаков")
     st.pyplot(fig)
