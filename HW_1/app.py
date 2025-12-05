@@ -17,7 +17,7 @@ if 'eda_feed' not in st.session_state:
 # Это предотвращает повторную загрузку pickle-файла при каждом клике пользователя
 @st.cache_resource
 def load_model_pack():
-    # Определяем абсолютный путь к файлу, так как стрилитхаб не видит простой относительный путь
+    # Определяем абсолютный путь к файлу, так как стримлитхаб не видит простой относительный путь
     current_dir = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(current_dir, 'model_pack.pkl')
 
