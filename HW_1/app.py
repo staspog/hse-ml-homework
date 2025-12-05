@@ -205,11 +205,11 @@ with tab2:
             engine_vol = st.number_input("Объем двигателя (см³)", 500, 10000, 1600, step=100)
             engine_str = f"{int(engine_vol)} CC"
 
-        with c2:
-            # Ввод мощности в л.с., формируем строку "100 bhp" (считаем 1 л.с. ≈ 1 bhp для простоты)
+            # Ввод мощности в л.с., формируем строку "100 bhp" (считаем 1 л.с. = 1 bhp для простоты)
             power_hp = st.number_input("Мощность (л.с.)", 30, 1000, 100, step=5)
             power_str = f"{power_hp} bhp"
-            
+
+        with c2:      
             seats = st.selectbox("Количество мест", [2,4,5,6,7,8,9,14], index=2)
             
             # Русские селекторы с маппингом
