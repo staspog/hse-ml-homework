@@ -29,7 +29,7 @@ def load_model_pack():
         return None
 
 # Используем cache_data для датафреймов
-# Streamlit запомнит результат выполнения функции и не будет дергать GitHub лишний раз
+# Streamlit запомнит результат выполнения функции и не будет ходить за датасетом в гитхаб
 @st.cache_data
 def load_train_data():
     url = 'https://raw.githubusercontent.com/Murcha1990/MLDS_ML_2022/main/Hometasks/HT1/cars_train.csv'
