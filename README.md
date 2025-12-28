@@ -5,3 +5,6 @@
 
 ## HW_2: Gradient descent
 #### Hyperparameters, Losses, Optimizators
+
+## HW_3: NLP, Text Classification
+#### BoW, CountVectorizer, Self-made LogReg
