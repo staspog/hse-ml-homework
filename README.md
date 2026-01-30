@@ -8,3 +8,6 @@
 
 ## HW_3: NLP, Text Classification
 #### BoW, CountVectorizer, Self-made LogReg
+
+## HW_4: Decision Trees, Random Forest
+#### SHAP, LIME, CART, Probability Calibration, Bias–Variance Decomposition
